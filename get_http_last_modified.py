@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
-
+"""
+overall:
+  input:
+    - config
+    - search query
+  output:
+    - formatted last-modified's value
+      - "2018-10-09"
+init_yaml:
+  - create template config
+main:
+  - argparse
+  - load config from yaml
+  - create auth token by given apiid and secret
+  hosts_search:
+    - using censys api
+    - https://search.censys.io/api#/hosts/searchHosts
+    - api call by given search query
+"""
 import os
 import re
 import time
@@ -71,7 +89,7 @@ def hosts_search(auth_token, args, config_dict):
         }
     
     # target url = https://search.censys.io/api/v2/hosts/search
-    #     ?q=services.tls.certificates.leaf_data.subject.common_name%3A%20FGT60ETK18099994&per_page=1&virtual_hosts=EXCLUDE
+    #     ?q=services.tls.certificates.leaf_data.subject.common_name%3A%20FGT60E**********&per_page=1&virtual_hosts=EXCLUDE
 
     # make query parameter fron config
     per_page = "1"
@@ -90,9 +108,8 @@ def hosts_search(auth_token, args, config_dict):
     return response_dict  # dict
 
 
-def hosts_ip_return_ip(response_dict, auth_token):
-    api_base = 'https://search.censys.io/api'
-    api_url = '/v2/hosts/search'
+def hosts_ip_return_ip(response_dict):
+    # expose the first ip address from http response to dig futher
     ip = response_dict['result']['hits'][0]['ip']
     
     return ip
@@ -121,13 +138,14 @@ def host_ip(ip, auth_token):
     return response_dict
 
 
-def my_get_last_modified(auth_token, args, config_dict):
+def get_http_last_modified(auth_token, args, config_dict):
     response_dict = hosts_search(auth_token, args, config_dict)
-    ip = hosts_ip_return_ip(response_dict, auth_token)
+    ip = hosts_ip_return_ip(response_dict)
     ip_response_dict = host_ip(ip, auth_token)
     #
     # print(json.dumps(ip_response_dict['result']['services'], indent=4))
     
+    # expose a readable last-modified value from each service port results
     for i in range(len(ip_response_dict['result']['services'])):
         try:
             print(json.dumps(ip_response_dict['result']['services'][i]['http']['response']['headers']['Last_Modified'][0], indent=4))
@@ -142,8 +160,11 @@ def main():
     if args.config:
         config_dict = load_config(args)
         auth_token = b64encode((config_dict['censys']['apiid'] + ':' + config_dict['censys']['secret']).encode('utf-8')).decode("ascii")
+    else:
+        print("You need config file.")
+        exit()
     
-    my_get_last_modified(auth_token, args, config_dict)
+    get_http_last_modified(auth_token, args, config_dict)
 
 
 if __name__ == '__main__':
